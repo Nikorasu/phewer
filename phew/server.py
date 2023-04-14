@@ -197,7 +197,11 @@ async def _parse_form_data(reader, headers):
     field_headers = await _parse_headers(reader)
     if len(field_headers) == 0:
       break
-    name = field_headers["content-disposition"].split("name=\"")[1][:-1]
+    try:
+      name = field_headers["content-disposition"].split("name=\"")[1][:-1]
+    except (IndexError, KeyError) as e:
+      logging.error(f"Error parsing form data: {e}")
+      break
     # get the field value
     value = ""
     while True:
@@ -290,17 +294,17 @@ async def _handle_request(reader, writer):
     if hasattr(body, '__len__'):
       response.add_header("Content-Length", len(body))
   
-  if response is not None:
-    # write status line
-    status_message = status_message_map.get(response.status, "Unknown")
-    writer.write(f"HTTP/1.1 {response.status} {status_message}\r\n".encode("ascii"))
+  #if response != None:
+  # write status line
+  status_message = status_message_map.get(response.status, "Unknown")
+  writer.write(f"HTTP/1.1 {response.status} {status_message}\r\n".encode("ascii"))
 
-    # write headers
-    for key, value in response.headers.items():
-      writer.write(f"{key}: {value}\r\n".encode("ascii"))
+  # write headers
+  for key, value in response.headers.items():
+    writer.write(f"{key}: {value}\r\n".encode("ascii"))
 
-    # blank line to denote end of headers
-    writer.write("\r\n".encode("ascii"))
+  # blank line to denote end of headers
+  writer.write("\r\n".encode("ascii"))
 
   if isinstance(response, FileResponse):
     # file
