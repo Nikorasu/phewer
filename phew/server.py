@@ -24,15 +24,22 @@ def urldecode(text):
       result += text[token_caret:]
       break
     result += text[token_caret:start]
-    code = int(text[start + 1:start + 3], 16)
-    result += chr(code)
+    try:
+      code = int(text[start + 1:start + 3], 16)
+      result += chr(code)
+    except ValueError:
+      pass
     token_caret = start + 3
   return result
+
 
 def _parse_query_string(query_string):
   result = {}
   for parameter in query_string.split("&"):
-    key, value = parameter.split("=", 1)
+    try:
+      key, value = parameter.split("=", 1)
+    except ValueError:
+      continue
     key = urldecode(key)
     value = urldecode(value)
     result[key] = value
@@ -157,7 +164,12 @@ async def _parse_headers(reader):
     header_line = await reader.readline()
     if header_line == b"\r\n": # crlf denotes body start
       break
-    name, value = header_line.decode().strip().split(": ", 1)
+    try:
+      name, value = header_line.decode().strip().split(": ", 1)
+    except ValueError:
+      name, value = "", ""
+      logging.error("ValueError parsing header.")
+      break
     headers[name.lower()] = value
   return headers
 
@@ -172,7 +184,10 @@ def _match_route(request):
 
 # if the content type is multipart/form-data then parse the fields
 async def _parse_form_data(reader, headers):
-  boundary = headers["content-type"].split("boundary=")[1]
+  try:
+    boundary = headers["content-type"].split("boundary=")[1]
+  except IndexError:
+    return None
   # discard first boundary line
   dummy = await reader.readline()
 
@@ -203,9 +218,12 @@ async def _parse_form_data(reader, headers):
 # if the content type is application/json then parse the body
 async def _parse_json_body(reader, headers):
   import json
-  content_length_bytes = int(headers["content-length"])
-  body = await reader.readexactly(content_length_bytes)
-  return json.loads(body.decode())
+  try:
+    content_length_bytes = int(headers["content-length"])
+    body = await reader.readexactly(content_length_bytes)
+    return json.loads(body.decode())
+  except Exception: #json.decoder.JSONDecodeError:
+    return None
 
 
 status_message_map = {
@@ -246,7 +264,7 @@ async def _handle_request(reader, writer):
       request.data = await _parse_json_body(reader, request.headers)
     if request.headers["content-type"].startswith("application/x-www-form-urlencoded"):
       form_data = await reader.read(int(request.headers["content-length"]))
-      request.form = _parse_query_string(form_data.decode()) 
+      request.form = _parse_query_string(form_data.decode())
 
   route = _match_route(request)
   if route:
@@ -272,17 +290,18 @@ async def _handle_request(reader, writer):
     if hasattr(body, '__len__'):
       response.add_header("Content-Length", len(body))
   
-  # write status line
-  status_message = status_message_map.get(response.status, "Unknown")
-  writer.write(f"HTTP/1.1 {response.status} {status_message}\r\n".encode("ascii"))
+  if response is not None:
+    # write status line
+    status_message = status_message_map.get(response.status, "Unknown")
+    writer.write(f"HTTP/1.1 {response.status} {status_message}\r\n".encode("ascii"))
 
-  # write headers
-  for key, value in response.headers.items():
-    writer.write(f"{key}: {value}\r\n".encode("ascii"))
+    # write headers
+    for key, value in response.headers.items():
+      writer.write(f"{key}: {value}\r\n".encode("ascii"))
 
-  # blank line to denote end of headers
-  writer.write("\r\n".encode("ascii"))
- 
+    # blank line to denote end of headers
+    writer.write("\r\n".encode("ascii"))
+
   if isinstance(response, FileResponse):
     # file
     with open(response.file, "rb") as f:
