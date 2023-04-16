@@ -1,4 +1,7 @@
 # **phew!** the Pico (or Python) HTTP Endpoint Wrangler
+**Phewer** fork - by Nikorasu, with debugging help from Fritz_Tom <sub>*discordID*:769156295092863046</sub>
+
+This version attempts to improve error handling, and is a little more robust.
 
 A small webserver and templating library specifically designed for MicroPython
 on the Pico W. It aims to provide a complete toolkit for easily creating high
