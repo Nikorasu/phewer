@@ -252,8 +252,8 @@ async def _handle_request(reader, writer):
 
   request_start_time = time.ticks_ms()
 
-  request_line = await reader.readline()
   try:
+    request_line = await reader.readline()
     method, uri, protocol = request_line.decode().split()
   except Exception as e:
     logging.error(e)
